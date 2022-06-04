@@ -1,0 +1,113 @@
+#Följande biblotek man behöver vid objektigenkänning
+from __future__ import print_function # Python 2/3 kompabilitet
+import cv2 # Importerar OpenCV library
+import numpy as np # Importerar Numpy library
+ 
+def main():
+ 
+    # Create a VideoCapture object
+    cap = cv2.VideoCapture(0)
+ 
+    #Skapa background subtractior objektet
+    #Använder de senaste 700 framesen från det kameran har spelat in för att bygga upp bakgrunden som ska igenkännas av koden. Precisionen ökar kanske om man minskar på history.
+    back_sub = cv2.createBackgroundSubtractorMOG2(history=700, 
+        varThreshold=25, detectShadows=True)
+ 
+    #Skapar kernel* för "morphological operation" som man kan säga bearbetar pixlarna efter bilderna man lägger in. 
+    #*Kernel = hanterar resurstilldelningen mellan datorns hårdvara (själva kameran) och de processer som körs i datorsystemet
+    kernel = np.ones((20,20),np.uint8) #Ändra på dimensionerna av kerneln för mer precision?
+
+    while(True):#Loopen
+ 
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+
+        #Masks
+
+        # Använd varje frame för att räkna ut förgrund masken och uppdatera själva bakgrunden
+        fg_mask = back_sub.apply(frame)
+ 
+        # Stäng mörka luckor i förgrundsobjektet med stängning
+        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+ 
+        # Median filter - ta bort noise, man försöker att reducera så mycket kontraster som möjligt.
+        fg_mask = cv2.medianBlur(fg_mask, 5) 
+         
+        # Gör bilden vit eller svart
+        _, fg_mask = cv2.threshold(fg_mask,127,255,cv2.THRESH_BINARY)
+ 
+        # Hittar största indexen av den största konturen(största boarding box) och ritar den.
+        fg_mask_bb = fg_mask
+        contours, hierarchy = cv2.findContours(fg_mask_bb,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)[-2:]
+        areas = [cv2.contourArea(c) for c in contours]
+ 
+        # Om det inte finns några konturer
+        if len(areas) < 1: #Visa alltså ingen boarding box då det inte finns något objekt att markera
+ 
+            # Visa camera
+            cv2.imshow('frame',frame)
+ 
+            # exit lopp när du trycker "f"
+            if cv2.waitKey(1) & 0xFF == ord('f'):
+                break
+ 
+            # börja om while-loopen, continue
+            continue
+ 
+        else:# Markerar handen
+            # Hitta största objektet med area
+            max_index = np.argmax(areas)
+ 
+        # rita bounding box/Själva rutan
+        cnt = contours[max_index]
+        x,y,w,h = cv2.boundingRect(cnt)
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),3)
+ 
+        # rita crikel i mitten av bounding box
+        x2 = x + int(w/2)
+        y2 = y + int(h/2)
+        cv2.circle(frame,(x2,y2),4,(0,255,0),-1)
+ 
+        # printa centrerade coordinates        
+        text = "x-led: " + str(x2) + ", y-led: " + str(y2)
+        cv2.putText(frame, text, (x2 - 10, y2 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+         
+        # Visa den reulterande framen, alltså med markeringen/översättningen   #Översättningen går till så att jag döper om bilderna på händerna till det dem faktist skulle ha översatts till.
+        cv2.imshow('frame',frame)
+ 
+        # stoppa loppen genom att trycka f
+        if cv2.waitKey(1) & 0xFF == ord('f'):
+            break
+ 
+    # Stänger ner video streamen
+    cap.release()
+    cv2.destroyAllWindows()
+ 
+    #kalla på mainfunktionen
+if __name__ == '__main__':
+    print(__doc__)
+    main()
+
+
+
+#Koden för inmatning av bilder
+
+    # img = cv2.imread("hand_1.jpg")
+
+
+    # from imageai.Detection import ObjectDetection
+
+    # detector = ObjectDetection()
+
+    # model_path = "./models/yolo-tiny.h5"
+    # input_path = "./input/hand_1.jpg"
+    # output_path = "./output/hand_1.jpg"
+
+    # detector.setModelTypeAsTinyYOLOv3()
+    # detector.setModelPath(model_path)
+    # detector.loadModel()
+    # detection = detector.detectObjectsFromImage(input_image=input_path, output_image_path=output_path)
+
+    # for eachObject in detection:
+    #     print(eachObject["Hand 1"] , " hand1 " , eachObject["percentage_probability"] )
